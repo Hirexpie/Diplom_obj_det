@@ -18,18 +18,23 @@ logger = logging.getLogger("web_yolo_telegram_bot")
 
 
 BOT_TOKEN = "8363556082:AAHk6UuUxfozn7LsKfws8o7KLStwBXYPfAI"
-WEBAPP_URL = os.getenv("WEBAPP_URL", "http://37.140.243.39:3000")
-FRONTEND_HEALTH_URL = os.getenv("FRONTEND_HEALTH_URL", WEBAPP_URL)
-BACKEND_HEALTH_URL = os.getenv("BACKEND_HEALTH_URL", "http://37.140.243.39:8000/health")
+WEBAPP_URL = "http://37.140.243.39:3000"
+FRONTEND_HEALTH_URL = WEBAPP_URL + "/health"
+BACKEND_HEALTH_URL = "http://37.140.243.39:8000/health"
+
+
+def is_valid_external_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return bool(parsed.scheme in {"http", "https"} and parsed.netloc)
 
 
 def is_supported_webapp_url(url: str) -> bool:
     parsed = urlparse(url)
     host = parsed.hostname or ""
-    return parsed.scheme == "https" or host in {"localhost", "127.0.0.1"}
+    return is_valid_external_url(url) and (parsed.scheme == "https" or host in {"localhost", "127.0.0.1"})
 
 
-def build_open_keyboard() -> InlineKeyboardMarkup:
+def build_open_keyboard() -> InlineKeyboardMarkup | None:
     buttons = []
 
     if is_supported_webapp_url(WEBAPP_URL):
@@ -37,8 +42,10 @@ def build_open_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="Open Web Interface", web_app=WebAppInfo(url=WEBAPP_URL))]
         )
 
-    buttons.append([InlineKeyboardButton(text="Open In Browser", url=WEBAPP_URL)])
-    return InlineKeyboardMarkup(buttons)
+    if is_valid_external_url(WEBAPP_URL):
+        buttons.append([InlineKeyboardButton(text="Open In Browser", url=WEBAPP_URL)])
+
+    return InlineKeyboardMarkup(buttons) if buttons else None
 
 
 def check_url(url: str) -> tuple[bool, str]:
