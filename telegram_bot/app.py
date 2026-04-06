@@ -11,7 +11,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    level=logging.INFO,
+    level=logging.INFO, 
 )
 logger = logging.getLogger("web_yolo_telegram_bot")
 
