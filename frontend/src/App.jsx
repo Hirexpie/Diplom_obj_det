@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://37.140.243.39:8000";
+const API_URL = "http://37.140.243.39:8000";
 
 function App() {
     const [models, setModels] = useState([]);
