@@ -16,10 +16,10 @@ logging.basicConfig(
 logger = logging.getLogger("web_yolo_telegram_bot")
 
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "http://localhost:3000")
+BOT_TOKEN = "8363556082:AAHk6UuUxfozn7LsKfws8o7KLStwBXYPfAI"
+WEBAPP_URL = os.getenv("WEBAPP_URL", "http://37.140.243.39:3000")
 FRONTEND_HEALTH_URL = os.getenv("FRONTEND_HEALTH_URL", WEBAPP_URL)
-BACKEND_HEALTH_URL = os.getenv("BACKEND_HEALTH_URL", "http://backend:8000/health")
+BACKEND_HEALTH_URL = os.getenv("BACKEND_HEALTH_URL", "http://37.140.243.39:8000/health")
 
 
 def build_open_keyboard() -> InlineKeyboardMarkup:

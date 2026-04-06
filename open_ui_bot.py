@@ -27,8 +27,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--url",
-        default="http://localhost:3000",
-        help="Frontend URL to open. Default: http://localhost:3000",
+        default="http://37.140.243.39:3000",
+        help="Frontend URL to open. Default: http://37.140.243.39:3000",
     )
     parser.add_argument(
         "--timeout",
