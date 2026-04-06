@@ -4,6 +4,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -22,11 +23,21 @@ FRONTEND_HEALTH_URL = os.getenv("FRONTEND_HEALTH_URL", WEBAPP_URL)
 BACKEND_HEALTH_URL = os.getenv("BACKEND_HEALTH_URL", "http://37.140.243.39:8000/health")
 
 
+def is_supported_webapp_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    return parsed.scheme == "https" or host in {"localhost", "127.0.0.1"}
+
+
 def build_open_keyboard() -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text="Open Web Interface", web_app=WebAppInfo(url=WEBAPP_URL))],
-        [InlineKeyboardButton(text="Open In Browser", url=WEBAPP_URL)],
-    ]
+    buttons = []
+
+    if is_supported_webapp_url(WEBAPP_URL):
+        buttons.append(
+            [InlineKeyboardButton(text="Open Web Interface", web_app=WebAppInfo(url=WEBAPP_URL))]
+        )
+
+    buttons.append([InlineKeyboardButton(text="Open In Browser", url=WEBAPP_URL)])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -73,6 +84,10 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(text=text, reply_markup=build_open_keyboard())
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.exception("Telegram bot update failed", exc_info=context.error)
+
+
 def main() -> None:
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
@@ -81,6 +96,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("open", open_command))
     application.add_handler(CommandHandler("status", status_command))
+    application.add_error_handler(error_handler)
 
     logger.info("Starting Telegram bot")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
