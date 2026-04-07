@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import re
 from pathlib import Path
 
 import cv2
@@ -49,22 +50,26 @@ class ModelManager:
         conf: float,
         iou: float,
         imgsz: int,
+        object_query: str = "",
     ) -> PredictionResponse:
         model = self.get_model(model_name)
         pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         image_np = np.array(pil_image)
+        names = model.names
+        requested_labels = self._parse_object_query(object_query)
+        selected_class_ids = self._match_class_ids(names, requested_labels)
 
         results = model.predict(
             source=image_np,
             conf=conf,
             iou=iou,
             imgsz=imgsz,
+            classes=selected_class_ids if selected_class_ids else None,
             verbose=False,
         )
         result = results[0]
 
         detections: list[Detection] = []
-        names = result.names
         if result.boxes is not None:
             for box in result.boxes:
                 cls_id = int(box.cls.item())
@@ -77,11 +82,12 @@ class ModelManager:
                     )
                 )
 
-        plotted = result.plot()
-        plotted_rgb = cv2.cvtColor(plotted, cv2.COLOR_BGR2RGB)
-        buffer = io.BytesIO()
-        Image.fromarray(plotted_rgb).save(buffer, format="JPEG", quality=90)
-        encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        if requested_labels and not selected_class_ids:
+            encoded = self._encode_image(pil_image)
+        else:
+            plotted = result.plot()
+            plotted_rgb = cv2.cvtColor(plotted, cv2.COLOR_BGR2RGB)
+            encoded = self._encode_image(Image.fromarray(plotted_rgb))
 
         return PredictionResponse(
             model=model_name,
@@ -92,8 +98,50 @@ class ModelManager:
             extra={
                 "speed_ms": result.speed,
                 "available_classes": [names[idx] for idx in sorted(names)],
+                "requested_classes": requested_labels,
+                "matched_classes": [names[idx] for idx in selected_class_ids],
+                "query_applied": bool(requested_labels),
             },
         )
+
+    @staticmethod
+    def _parse_object_query(object_query: str) -> list[str]:
+        if not object_query.strip():
+            return []
+
+        parts = re.split(r"[,;\n]+", object_query)
+        return [part.strip() for part in parts if part.strip()]
+
+    @staticmethod
+    def _normalize_label(label: str) -> str:
+        return re.sub(r"\s+", " ", label.strip().lower())
+
+    def _match_class_ids(self, names: dict[int, str], requested_labels: list[str]) -> list[int]:
+        if not requested_labels:
+            return []
+
+        normalized_names = {
+            class_id: self._normalize_label(class_name)
+            for class_id, class_name in names.items()
+        }
+
+        matched_ids: list[int] = []
+        for requested_label in requested_labels:
+            normalized_request = self._normalize_label(requested_label)
+            for class_id, normalized_name in normalized_names.items():
+                if (
+                    normalized_request == normalized_name
+                    or normalized_request in normalized_name
+                    or normalized_name in normalized_request
+                ) and class_id not in matched_ids:
+                    matched_ids.append(class_id)
+        return matched_ids
+
+    @staticmethod
+    def _encode_image(image: Image.Image) -> str:
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=90)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 model_manager = ModelManager(settings.models_dir)

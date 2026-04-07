@@ -16,6 +16,7 @@ function App() {
         iou: 0.45,
         imgsz: 960,
     });
+    const [objectQuery, setObjectQuery] = useState("");
 
     useEffect(() => {
         let isMounted = true;
@@ -74,6 +75,7 @@ function App() {
         formData.append("conf", String(settings.conf));
         formData.append("iou", String(settings.iou));
         formData.append("imgsz", String(settings.imgsz));
+        formData.append("object_query", objectQuery);
 
         setPredicting(true);
         setError("");
@@ -149,6 +151,22 @@ function App() {
                         </label>
 
                         <div className="slider-grid">
+                            <label className="field">
+                                <span>Запрос по объектам</span>
+                                <input
+                                    type="text"
+                                    placeholder="Например: person, car"
+                                    value={objectQuery}
+                                    onChange={(event) =>
+                                        setObjectQuery(event.target.value)
+                                    }
+                                />
+                                <small className="field-hint">
+                                    Можно указать один или несколько классов через
+                                    запятую.
+                                </small>
+                            </label>
+
                             <label className="field">
                                 <span>Confidence: {settings.conf}</span>
                                 <input
@@ -267,6 +285,18 @@ function App() {
                         </p>
                     </div>
 
+                    {result?.extra?.query_applied ? (
+                        <div className="query-summary">
+                            <strong>Запрос:</strong>{" "}
+                            {result.extra.requested_classes?.join(", ") || "не указан"}
+                            <br />
+                            <strong>Совпавшие классы:</strong>{" "}
+                            {result.extra.matched_classes?.length
+                                ? result.extra.matched_classes.join(", ")
+                                : "совпадений нет"}
+                        </div>
+                    ) : null}
+
                     <div className="detections-list">
                         {result?.detections?.length ? (
                             result.detections.map((detection, index) => (
@@ -286,10 +316,23 @@ function App() {
                             <div className="empty-state">
                                 {loadingModels
                                     ? "Загружаем модели..."
-                                    : "После запуска инференса здесь будет таблица результатов"}
+                                    : result?.extra?.query_applied &&
+                                        !result?.extra?.matched_classes?.length
+                                      ? "По запросу не найдено классов в выбранной модели"
+                                      : "После запуска инференса здесь будет таблица результатов"}
                             </div>
                         )}
                     </div>
+
+                    {result?.extra?.available_classes?.length ? (
+                        <div className="classes-cloud">
+                            {result.extra.available_classes.map((className) => (
+                                <span key={className} className="class-chip">
+                                    {className}
+                                </span>
+                            ))}
+                        </div>
+                    ) : null}
                 </section>
             </main>
         </div>

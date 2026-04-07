@@ -36,6 +36,7 @@ async def predict(
     conf: float = Form(0.25),
     iou: float = Form(0.45),
     imgsz: int = Form(960),
+    object_query: str = Form(""),
     file: UploadFile = File(...),
 ) -> PredictionResponse:
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -49,6 +50,7 @@ async def predict(
             conf=conf,
             iou=iou,
             imgsz=imgsz,
+            object_query=object_query,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
