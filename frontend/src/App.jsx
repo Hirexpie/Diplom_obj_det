@@ -280,15 +280,7 @@ function App() {
                         </div>
                         <div className="image-card">
                             <h3>Prediction</h3>
-                            {renderedSrc ? (
-                                <a
-                                    className="download-button"
-                                    href={renderedSrc}
-                                    download={downloadName}
-                                >
-                                    Скачать
-                                </a>
-                            ) : null}
+
                             {renderedSrc ? (
                                 resultKind === FILE_KIND_VIDEO ? (
                                     <video
@@ -307,6 +299,15 @@ function App() {
                                     Результат появится после инференса
                                 </div>
                             )}
+                            {renderedSrc ? (
+                                <a
+                                    className="download-button"
+                                    href={renderedSrc}
+                                    download={downloadName}
+                                >
+                                    Скачать
+                                </a>
+                            ) : null}
                         </div>
                     </div>
                 </section>
