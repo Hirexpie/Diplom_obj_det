@@ -257,6 +257,19 @@ select {
   letter-spacing: 0.08em;
 }
 
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 12px;
+  border: 1px solid rgba(125, 249, 198, 0.24);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: rgba(8, 29, 25, 0.34);
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+
 .image-card img,
 .image-card video {
   width: 100%;

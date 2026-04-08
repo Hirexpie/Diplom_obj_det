@@ -36,6 +36,11 @@ function App() {
         result?.rendered_media && result?.rendered_mime_type
             ? `data:${result.rendered_mime_type};base64,${result.rendered_media}`
             : "";
+    const downloadName = result
+        ? `prediction-${selectedModel.replace(/\.[^.]+$/, "")}.${
+              result.media_type === FILE_KIND_VIDEO ? "mp4" : "jpg"
+          }`
+        : "prediction";
 
     useEffect(() => {
         let isMounted = true;
@@ -275,6 +280,15 @@ function App() {
                         </div>
                         <div className="image-card">
                             <h3>Prediction</h3>
+                            {renderedSrc ? (
+                                <a
+                                    className="download-button"
+                                    href={renderedSrc}
+                                    download={downloadName}
+                                >
+                                    Скачать
+                                </a>
+                            ) : null}
                             {renderedSrc ? (
                                 resultKind === FILE_KIND_VIDEO ? (
                                     <video
