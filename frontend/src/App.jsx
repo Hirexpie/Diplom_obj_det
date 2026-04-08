@@ -125,16 +125,11 @@ function App() {
             <header className="hero">
                 <div>
                     <p className="eyebrow">YOLO Web Interface</p>
-                    <h1>Control room для ваших моделей</h1>
-                    <p className="hero-copy">
-                        Загружайте изображение или видео, переключайте веса и
-                        сразу смотрите размеченный результат вместе со списком
-                        детекций.
-                    </p>
+                    <h1>Детекция объектов</h1>
                 </div>
                 <div className="hero-stat">
                     <span>{models.length}</span>
-                    <p>моделей найдено в каталоге `/models`</p>
+                    <p>моделей</p>
                 </div>
             </header>
 
@@ -169,9 +164,6 @@ function App() {
                                     setError("");
                                 }}
                             />
-                            <small className="field-hint">
-                                Поддерживаются изображения и видео.
-                            </small>
                         </label>
 
                         <div className="slider-grid">
@@ -179,16 +171,12 @@ function App() {
                                 <span>Запрос по объектам</span>
                                 <input
                                     type="text"
-                                    placeholder="Например: person, car"
+                                    placeholder="person, car"
                                     value={objectQuery}
                                     onChange={(event) =>
                                         setObjectQuery(event.target.value)
                                     }
                                 />
-                                <small className="field-hint">
-                                    Можно указать один или несколько классов через
-                                    запятую.
-                                </small>
                             </label>
 
                             <label className="field">
@@ -262,11 +250,7 @@ function App() {
                 <section className="panel image-panel">
                     <div className="panel-header">
                         <h2>Файл</h2>
-                        <p>
-                            {previewUrl
-                                ? "Исходник слева, результат ниже"
-                                : "Загрузите изображение или видео для предпросмотра"}
-                        </p>
+                        <p>{previewUrl ? "Предпросмотр" : "Нет файла"}</p>
                     </div>
 
                     <div className="image-stack">
@@ -286,9 +270,7 @@ function App() {
                                     />
                                 )
                             ) : (
-                                <div className="empty-state">
-                                    Нет файла
-                                </div>
+                                <div className="empty-state">Нет файла</div>
                             )}
                         </div>
                         <div className="image-card">
@@ -308,7 +290,7 @@ function App() {
                                 )
                             ) : (
                                 <div className="empty-state">
-                                    Результат появится после инференса
+                                    Нет результата
                                 </div>
                             )}
                         </div>
@@ -320,8 +302,8 @@ function App() {
                         <h2>Детекции</h2>
                         <p>
                             {result
-                                ? `${result.total_detections} объектов, модель ${result.model}`
-                                : "Здесь появится список найденных объектов"}
+                                ? `${result.total_detections} объектов`
+                                : "Нет данных"}
                         </p>
                     </div>
 
@@ -361,8 +343,8 @@ function App() {
                                     ? "Загружаем модели..."
                                     : result?.extra?.query_applied &&
                                         !result?.extra?.matched_classes?.length
-                                      ? "По запросу не найдено классов в выбранной модели"
-                                      : "После запуска инференса здесь будет таблица результатов"}
+                                      ? "Нет совпадений"
+                                      : "Нет детекций"}
                             </div>
                         )}
                     </div>
