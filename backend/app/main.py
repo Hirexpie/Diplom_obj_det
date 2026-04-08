@@ -39,14 +39,23 @@ async def predict(
     object_query: str = Form(""),
     file: UploadFile = File(...),
 ) -> PredictionResponse:
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are supported")
+    content_type = file.content_type or ""
+    if content_type.startswith("image/"):
+        media_type = "image"
+    elif content_type.startswith("video/"):
+        media_type = "video"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Only image and video files are supported",
+        )
 
     try:
         contents = await file.read()
         return model_manager.predict(
             model_name=model_name,
-            image_bytes=contents,
+            file_bytes=contents,
+            media_type=media_type,
             conf=conf,
             iou=iou,
             imgsz=imgsz,

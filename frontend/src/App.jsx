@@ -1,6 +1,19 @@
 import { useEffect, useState } from "react";
 
 const API_URL = "http://37.140.243.39:8000";
+const FILE_KIND_IMAGE = "image";
+const FILE_KIND_VIDEO = "video";
+
+function getFileKind(fileOrType) {
+    const mimeType =
+        typeof fileOrType === "string" ? fileOrType : fileOrType?.type ?? "";
+
+    if (mimeType.startsWith("video/")) {
+        return FILE_KIND_VIDEO;
+    }
+
+    return FILE_KIND_IMAGE;
+}
 
 function App() {
     const [models, setModels] = useState([]);
@@ -17,6 +30,12 @@ function App() {
         imgsz: 960,
     });
     const [objectQuery, setObjectQuery] = useState("");
+    const fileKind = file ? getFileKind(file) : FILE_KIND_IMAGE;
+    const resultKind = result?.media_type ?? FILE_KIND_IMAGE;
+    const renderedSrc =
+        result?.rendered_media && result?.rendered_mime_type
+            ? `data:${result.rendered_mime_type};base64,${result.rendered_media}`
+            : "";
 
     useEffect(() => {
         let isMounted = true;
@@ -65,7 +84,7 @@ function App() {
     async function handleSubmit(event) {
         event.preventDefault();
         if (!file || !selectedModel) {
-            setError("Выберите модель и изображение");
+            setError("Выберите модель и файл");
             return;
         }
 
@@ -108,8 +127,8 @@ function App() {
                     <p className="eyebrow">YOLO Web Interface</p>
                     <h1>Control room для ваших моделей</h1>
                     <p className="hero-copy">
-                        Загружайте изображение, переключайте веса и сразу
-                        смотрите размеченный результат вместе со списком
+                        Загружайте изображение или видео, переключайте веса и
+                        сразу смотрите размеченный результат вместе со списком
                         детекций.
                     </p>
                 </div>
@@ -140,14 +159,19 @@ function App() {
                         </label>
 
                         <label className="field">
-                            <span>Изображение</span>
+                            <span>Файл</span>
                             <input
                                 type="file"
-                                accept="image/*"
-                                onChange={(event) =>
-                                    setFile(event.target.files?.[0] ?? null)
-                                }
+                                accept="image/*,video/*"
+                                onChange={(event) => {
+                                    setFile(event.target.files?.[0] ?? null);
+                                    setResult(null);
+                                    setError("");
+                                }}
                             />
+                            <small className="field-hint">
+                                Поддерживаются изображения и видео.
+                            </small>
                         </label>
 
                         <div className="slider-grid">
@@ -237,11 +261,11 @@ function App() {
 
                 <section className="panel image-panel">
                     <div className="panel-header">
-                        <h2>Изображение</h2>
+                        <h2>Файл</h2>
                         <p>
                             {previewUrl
                                 ? "Исходник слева, результат ниже"
-                                : "Загрузите файл для предпросмотра"}
+                                : "Загрузите изображение или видео для предпросмотра"}
                         </p>
                     </div>
 
@@ -249,23 +273,39 @@ function App() {
                         <div className="image-card">
                             <h3>Original</h3>
                             {previewUrl ? (
-                                <img
-                                    src={previewUrl}
-                                    alt="Исходное изображение"
-                                />
+                                fileKind === FILE_KIND_VIDEO ? (
+                                    <video
+                                        src={previewUrl}
+                                        controls
+                                        playsInline
+                                    />
+                                ) : (
+                                    <img
+                                        src={previewUrl}
+                                        alt="Исходное изображение"
+                                    />
+                                )
                             ) : (
                                 <div className="empty-state">
-                                    Нет изображения
+                                    Нет файла
                                 </div>
                             )}
                         </div>
                         <div className="image-card">
                             <h3>Prediction</h3>
-                            {result?.rendered_image ? (
-                                <img
-                                    src={`data:image/jpeg;base64,${result.rendered_image}`}
-                                    alt="Результат предсказания"
-                                />
+                            {renderedSrc ? (
+                                resultKind === FILE_KIND_VIDEO ? (
+                                    <video
+                                        src={renderedSrc}
+                                        controls
+                                        playsInline
+                                    />
+                                ) : (
+                                    <img
+                                        src={renderedSrc}
+                                        alt="Результат предсказания"
+                                    />
+                                )
                             ) : (
                                 <div className="empty-state">
                                     Результат появится после инференса
@@ -309,6 +349,9 @@ function App() {
                                         {Math.round(detection.confidence * 100)}
                                         %
                                     </span>
+                                    {typeof detection.frame_index === "number" ? (
+                                        <code>frame: {detection.frame_index}</code>
+                                    ) : null}
                                     <code>{detection.bbox.join(", ")}</code>
                                 </article>
                             ))
@@ -323,6 +366,22 @@ function App() {
                             </div>
                         )}
                     </div>
+
+                    {result?.media_type === FILE_KIND_VIDEO ? (
+                        <div className="query-summary">
+                            <strong>Кадров:</strong> {result.extra.frame_count ?? "?"}
+                            <br />
+                            <strong>FPS:</strong> {result.extra.fps ?? "?"}
+                            <br />
+                            <strong>Сводка по классам:</strong>{" "}
+                            {result.extra.class_totals &&
+                            Object.keys(result.extra.class_totals).length
+                                ? Object.entries(result.extra.class_totals)
+                                      .map(([name, count]) => `${name}: ${count}`)
+                                      .join(", ")
+                                : "детекций нет"}
+                        </div>
+                    ) : null}
 
                     {result?.extra?.available_classes?.length ? (
                         <div className="classes-cloud">

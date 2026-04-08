@@ -257,12 +257,14 @@ select {
   letter-spacing: 0.08em;
 }
 
-.image-card img {
+.image-card img,
+.image-card video {
   width: 100%;
   height: auto;
   max-height: 520px;
   object-fit: contain;
   border-radius: 16px;
+  background: #03070e;
 }
 
 .empty-state {
