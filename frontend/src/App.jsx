@@ -6,7 +6,7 @@ const FILE_KIND_VIDEO = "video";
 
 function getFileKind(fileOrType) {
     const mimeType =
-        typeof fileOrType === "string" ? fileOrType : fileOrType?.type ?? "";
+        typeof fileOrType === "string" ? fileOrType : (fileOrType?.type ?? "");
 
     if (mimeType.startsWith("video/")) {
         return FILE_KIND_VIDEO;
@@ -122,17 +122,6 @@ function App() {
             <div className="ambient ambient-left" />
             <div className="ambient ambient-right" />
 
-            <header className="hero">
-                <div>
-                    <p className="eyebrow">YOLO Web Interface</p>
-                    <h1>Детекция объектов</h1>
-                </div>
-                <div className="hero-stat">
-                    <span>{models.length}</span>
-                    <p>моделей</p>
-                </div>
-            </header>
-
             <main className="grid">
                 <section className="panel form-panel">
                     <form onSubmit={handleSubmit}>
@@ -164,6 +153,9 @@ function App() {
                                     setError("");
                                 }}
                             />
+                            <small className="field-hint">
+                                Поддерживаются изображения и видео.
+                            </small>
                         </label>
 
                         <div className="slider-grid">
@@ -171,12 +163,16 @@ function App() {
                                 <span>Запрос по объектам</span>
                                 <input
                                     type="text"
-                                    placeholder="person, car"
+                                    placeholder="Например: person, car"
                                     value={objectQuery}
                                     onChange={(event) =>
                                         setObjectQuery(event.target.value)
                                     }
                                 />
+                                <small className="field-hint">
+                                    Можно указать один или несколько классов
+                                    через запятую.
+                                </small>
                             </label>
 
                             <label className="field">
@@ -250,7 +246,11 @@ function App() {
                 <section className="panel image-panel">
                     <div className="panel-header">
                         <h2>Файл</h2>
-                        <p>{previewUrl ? "Предпросмотр" : "Нет файла"}</p>
+                        <p>
+                            {previewUrl
+                                ? "Исходник слева, результат ниже"
+                                : "Загрузите изображение или видео для предпросмотра"}
+                        </p>
                     </div>
 
                     <div className="image-stack">
@@ -290,7 +290,7 @@ function App() {
                                 )
                             ) : (
                                 <div className="empty-state">
-                                    Нет результата
+                                    Результат появится после инференса
                                 </div>
                             )}
                         </div>
@@ -302,15 +302,16 @@ function App() {
                         <h2>Детекции</h2>
                         <p>
                             {result
-                                ? `${result.total_detections} объектов`
-                                : "Нет данных"}
+                                ? `${result.total_detections} объектов, модель ${result.model}`
+                                : "Здесь появится список найденных объектов"}
                         </p>
                     </div>
 
                     {result?.extra?.query_applied ? (
                         <div className="query-summary">
                             <strong>Запрос:</strong>{" "}
-                            {result.extra.requested_classes?.join(", ") || "не указан"}
+                            {result.extra.requested_classes?.join(", ") ||
+                                "не указан"}
                             <br />
                             <strong>Совпавшие классы:</strong>{" "}
                             {result.extra.matched_classes?.length
@@ -331,8 +332,11 @@ function App() {
                                         {Math.round(detection.confidence * 100)}
                                         %
                                     </span>
-                                    {typeof detection.frame_index === "number" ? (
-                                        <code>frame: {detection.frame_index}</code>
+                                    {typeof detection.frame_index ===
+                                    "number" ? (
+                                        <code>
+                                            frame: {detection.frame_index}
+                                        </code>
                                     ) : null}
                                     <code>{detection.bbox.join(", ")}</code>
                                 </article>
@@ -343,15 +347,16 @@ function App() {
                                     ? "Загружаем модели..."
                                     : result?.extra?.query_applied &&
                                         !result?.extra?.matched_classes?.length
-                                      ? "Нет совпадений"
-                                      : "Нет детекций"}
+                                      ? "По запросу не найдено классов в выбранной модели"
+                                      : "После запуска инференса здесь будет таблица результатов"}
                             </div>
                         )}
                     </div>
 
                     {result?.media_type === FILE_KIND_VIDEO ? (
                         <div className="query-summary">
-                            <strong>Кадров:</strong> {result.extra.frame_count ?? "?"}
+                            <strong>Кадров:</strong>{" "}
+                            {result.extra.frame_count ?? "?"}
                             <br />
                             <strong>FPS:</strong> {result.extra.fps ?? "?"}
                             <br />
@@ -359,7 +364,10 @@ function App() {
                             {result.extra.class_totals &&
                             Object.keys(result.extra.class_totals).length
                                 ? Object.entries(result.extra.class_totals)
-                                      .map(([name, count]) => `${name}: ${count}`)
+                                      .map(
+                                          ([name, count]) =>
+                                              `${name}: ${count}`,
+                                      )
                                       .join(", ")
                                 : "детекций нет"}
                         </div>
