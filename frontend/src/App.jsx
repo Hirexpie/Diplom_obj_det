@@ -1,6 +1,26 @@
 import { useEffect, useState } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://37.140.243.39:8000";
+function getApiUrl() {
+    const configuredUrl = import.meta.env.VITE_API_URL;
+    const pageHost = window.location.hostname;
+    const isLocalPage = pageHost === "localhost" || pageHost === "127.0.0.1";
+
+    if (
+        configuredUrl &&
+        !isLocalPage &&
+        /:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(configuredUrl)
+    ) {
+        return `${window.location.protocol}//${pageHost}:8000`;
+    }
+
+    if (configuredUrl) {
+        return configuredUrl;
+    }
+
+    return `${window.location.protocol}//${pageHost}:8000`;
+}
+
+const API_URL = getApiUrl();
 const FILE_KIND_IMAGE = "image";
 const FILE_KIND_VIDEO = "video";
 
