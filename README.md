@@ -48,19 +48,39 @@ docker compose up --build
 
 ### Live-трансляции
 
-Во фронтенде есть вкладка `Трансляции`. В поле источника можно указать:
+Во фронтенде есть вкладка `Трансляции`. Она использует два WebSocket-соединения
+на один `stream_id`:
 
-- `0` — камера, доступная backend-процессу
-- `rtsp://...` — RTSP-поток камеры
-- `http://...` или `https://...` — HTTP-видеопоток, который умеет читать OpenCV
+- `viewer` — получает кадры и показывает трансляцию
+- `publisher` — отправляет кадры на backend
 
-Endpoint для прямого просмотра:
+Viewer endpoint:
+
+```text
+WS /ws/streams/main/view
+```
+
+Publisher endpoint:
+
+```text
+WS /ws/streams/main/publish?model_name=baseline_960_b4_e20.pt&conf=0.25&iou=0.45&imgsz=960
+```
+
+Publisher может отправлять бинарные JPEG/PNG кадры. Также поддерживается текстовый
+JSON-формат:
+
+```json
+{"image": "data:image/jpeg;base64,..."}
+```
+
+Backend обрабатывает кадр выбранной YOLO-моделью и рассылает готовый JPEG всем
+viewer-подключениям этого `stream_id`.
+
+Старый HTTP MJPEG endpoint также оставлен:
 
 ```text
 GET /api/stream?model_name=baseline_960_b4_e20.pt&source=0&conf=0.25&iou=0.45&imgsz=960&max_fps=12
 ```
-
-Ответ отдаётся как `multipart/x-mixed-replace` MJPEG. Если backend запущен в Docker и нужен доступ к физической камере хоста, контейнеру нужно отдельно пробросить устройство камеры.
 
 ## Telegram-бот
 

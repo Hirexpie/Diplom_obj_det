@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function getApiUrl() {
     const configuredUrl = import.meta.env.VITE_API_URL;
@@ -24,6 +24,12 @@ const API_URL = getApiUrl();
 const FILE_KIND_IMAGE = "image";
 const FILE_KIND_VIDEO = "video";
 
+function getWsUrl(path) {
+    const apiUrl = new URL(API_URL);
+    apiUrl.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
+    return `${apiUrl.origin}${path}`;
+}
+
 function getFileKind(fileOrType) {
     const mimeType =
         typeof fileOrType === "string" ? fileOrType : (fileOrType?.type ?? "");
@@ -36,6 +42,13 @@ function getFileKind(fileOrType) {
 }
 
 function App() {
+    const viewerSocketRef = useRef(null);
+    const publisherSocketRef = useRef(null);
+    const cameraStreamRef = useRef(null);
+    const captureTimerRef = useRef(null);
+    const canvasRef = useRef(null);
+    const publisherVideoRef = useRef(null);
+    const viewerFrameUrlRef = useRef("");
     const [activePage, setActivePage] = useState("predict");
     const [models, setModels] = useState([]);
     const [selectedModel, setSelectedModel] = useState("");
@@ -52,10 +65,14 @@ function App() {
     });
     const [objectQuery, setObjectQuery] = useState("");
     const [streamSettings, setStreamSettings] = useState({
-        source: "0",
-        maxFps: 12,
+        streamId: "main",
+        maxFps: 8,
     });
-    const [streamUrl, setStreamUrl] = useState("");
+    const [viewerFrameUrl, setViewerFrameUrl] = useState("");
+    const [viewerStatus, setViewerStatus] = useState("Отключено");
+    const [publisherStatus, setPublisherStatus] = useState("Отключено");
+    const [sentFrames, setSentFrames] = useState(0);
+    const [receivedFrames, setReceivedFrames] = useState(0);
     const [streamError, setStreamError] = useState("");
     const fileKind = file ? getFileKind(file) : FILE_KIND_IMAGE;
     const resultKind = result?.media_type ?? FILE_KIND_IMAGE;
@@ -113,6 +130,16 @@ function App() {
         return () => URL.revokeObjectURL(objectUrl);
     }, [file]);
 
+    useEffect(() => {
+        return () => {
+            stopPublisher();
+            stopViewer();
+            if (viewerFrameUrlRef.current) {
+                URL.revokeObjectURL(viewerFrameUrlRef.current);
+            }
+        };
+    }, []);
+
     async function handleSubmit(event) {
         event.preventDefault();
         if (!file || !selectedModel) {
@@ -149,39 +176,205 @@ function App() {
         }
     }
 
-    function buildStreamUrl() {
+    function buildViewerWsUrl() {
+        const streamId = encodeURIComponent(streamSettings.streamId.trim());
+        return getWsUrl(`/ws/streams/${streamId}/view`);
+    }
+
+    function buildPublisherWsUrl() {
+        const streamId = encodeURIComponent(streamSettings.streamId.trim());
         const params = new URLSearchParams({
             model_name: selectedModel,
-            source: streamSettings.source,
             conf: String(settings.conf),
             iou: String(settings.iou),
             imgsz: String(settings.imgsz),
             object_query: objectQuery,
-            max_fps: String(streamSettings.maxFps),
         });
 
-        return `${API_URL}/api/stream?${params.toString()}`;
+        return getWsUrl(`/ws/streams/${streamId}/publish?${params.toString()}`);
     }
 
-    function handleStartStream(event) {
+    function handleStartViewer(event) {
         event.preventDefault();
 
-        if (!selectedModel) {
-            setStreamError("Выберите модель для трансляции");
+        if (!streamSettings.streamId.trim()) {
+            setStreamError("Укажите ID трансляции");
             return;
         }
 
-        if (!streamSettings.source.trim()) {
-            setStreamError("Укажите источник трансляции");
-            return;
-        }
-
+        stopViewer();
         setStreamError("");
-        setStreamUrl(buildStreamUrl());
+        setReceivedFrames(0);
+
+        const socket = new WebSocket(buildViewerWsUrl());
+        socket.binaryType = "blob";
+        viewerSocketRef.current = socket;
+
+        socket.onopen = () => setViewerStatus("Подключено");
+        socket.onmessage = (message) => {
+            if (message.data instanceof Blob) {
+                const nextUrl = URL.createObjectURL(message.data);
+                if (viewerFrameUrlRef.current) {
+                    URL.revokeObjectURL(viewerFrameUrlRef.current);
+                }
+                viewerFrameUrlRef.current = nextUrl;
+                setViewerFrameUrl(nextUrl);
+                setReceivedFrames((count) => count + 1);
+                return;
+            }
+
+            try {
+                const data = JSON.parse(message.data);
+                if (data?.message) {
+                    setViewerStatus(data.message);
+                }
+            } catch {
+                setViewerStatus("Подключено");
+            }
+        };
+        socket.onerror = () =>
+            setStreamError("Ошибка WebSocket просмотра. Проверьте backend.");
+        socket.onclose = () => {
+            if (viewerSocketRef.current === socket) {
+                viewerSocketRef.current = null;
+                setViewerStatus("Отключено");
+            }
+        };
     }
 
-    function handleStopStream() {
-        setStreamUrl("");
+    function stopViewer() {
+        if (viewerSocketRef.current) {
+            viewerSocketRef.current.close();
+            viewerSocketRef.current = null;
+        }
+        setViewerStatus("Отключено");
+    }
+
+    async function handleStartPublisher(event) {
+        event.preventDefault();
+
+        if (!streamSettings.streamId.trim()) {
+            setStreamError("Укажите ID трансляции");
+            return;
+        }
+
+        if (!selectedModel) {
+            setStreamError("Выберите модель для обработки кадров");
+            return;
+        }
+
+        stopPublisher();
+        setStreamError("");
+        setSentFrames(0);
+
+        try {
+            const cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false,
+            });
+            cameraStreamRef.current = cameraStream;
+
+            if (publisherVideoRef.current) {
+                publisherVideoRef.current.srcObject = cameraStream;
+                await publisherVideoRef.current.play();
+            }
+
+            const socket = new WebSocket(buildPublisherWsUrl());
+            publisherSocketRef.current = socket;
+
+            socket.onopen = () => {
+                setPublisherStatus("Подключено");
+                startFrameCapture(socket);
+            };
+            socket.onmessage = (message) => {
+                try {
+                    const data = JSON.parse(message.data);
+                    if (data?.type === "ack") {
+                        setSentFrames(data.frame_index ?? 0);
+                    }
+                } catch {
+                    setPublisherStatus("Подключено");
+                }
+            };
+            socket.onerror = () =>
+                setStreamError("Ошибка WebSocket отправителя. Проверьте backend.");
+            socket.onclose = () => {
+                if (publisherSocketRef.current === socket) {
+                    publisherSocketRef.current = null;
+                    setPublisherStatus("Отключено");
+                    stopCaptureTimer();
+                }
+            };
+        } catch (requestError) {
+            setStreamError(
+                requestError?.message ??
+                    "Не удалось получить доступ к камере браузера.",
+            );
+            stopPublisher();
+        }
+    }
+
+    function startFrameCapture(socket) {
+        stopCaptureTimer();
+        const intervalMs = Math.max(1000 / streamSettings.maxFps, 33);
+
+        captureTimerRef.current = window.setInterval(() => {
+            const video = publisherVideoRef.current;
+            const canvas = canvasRef.current;
+
+            if (!video || !canvas || socket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            const width = video.videoWidth || 640;
+            const height = video.videoHeight || 480;
+            if (!width || !height) {
+                return;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext("2d");
+            context.drawImage(video, 0, 0, width, height);
+            canvas.toBlob(
+                (blob) => {
+                    if (blob && socket.readyState === WebSocket.OPEN) {
+                        socket.send(blob);
+                    }
+                },
+                "image/jpeg",
+                0.82,
+            );
+        }, intervalMs);
+    }
+
+    function stopCaptureTimer() {
+        if (captureTimerRef.current) {
+            window.clearInterval(captureTimerRef.current);
+            captureTimerRef.current = null;
+        }
+    }
+
+    function stopPublisher() {
+        stopCaptureTimer();
+
+        if (publisherSocketRef.current) {
+            publisherSocketRef.current.close();
+            publisherSocketRef.current = null;
+        }
+
+        if (cameraStreamRef.current) {
+            cameraStreamRef.current
+                .getTracks()
+                .forEach((track) => track.stop());
+            cameraStreamRef.current = null;
+        }
+
+        if (publisherVideoRef.current) {
+            publisherVideoRef.current.srcObject = null;
+        }
+
+        setPublisherStatus("Отключено");
     }
 
     return (
@@ -482,7 +675,26 @@ function App() {
             ) : (
             <main className="stream-grid">
                 <section className="panel form-panel">
-                    <form onSubmit={handleStartStream}>
+                    <form onSubmit={handleStartViewer}>
+                        <label className="field">
+                            <span>ID трансляции</span>
+                            <input
+                                type="text"
+                                placeholder="main"
+                                value={streamSettings.streamId}
+                                onChange={(event) =>
+                                    setStreamSettings((current) => ({
+                                        ...current,
+                                        streamId: event.target.value,
+                                    }))
+                                }
+                            />
+                            <small className="field-hint">
+                                Отправитель и просмотрщик должны использовать
+                                один ID.
+                            </small>
+                        </label>
+
                         <label className="field">
                             <span>Модель</span>
                             <select
@@ -498,24 +710,6 @@ function App() {
                                     </option>
                                 ))}
                             </select>
-                        </label>
-
-                        <label className="field">
-                            <span>Источник</span>
-                            <input
-                                type="text"
-                                placeholder="0, rtsp://..., http://..."
-                                value={streamSettings.source}
-                                onChange={(event) =>
-                                    setStreamSettings((current) => ({
-                                        ...current,
-                                        source: event.target.value,
-                                    }))
-                                }
-                            />
-                            <small className="field-hint">
-                                Для локальной камеры backend-сервера укажите 0.
-                            </small>
                         </label>
 
                         <label className="field">
@@ -582,11 +776,11 @@ function App() {
                         </label>
 
                         <label className="field">
-                            <span>FPS: {streamSettings.maxFps}</span>
+                            <span>FPS отправки: {streamSettings.maxFps}</span>
                             <input
                                 type="range"
                                 min="1"
-                                max="30"
+                                max="15"
                                 step="1"
                                 value={streamSettings.maxFps}
                                 onChange={(event) =>
@@ -599,15 +793,28 @@ function App() {
                         </label>
 
                         <button className="primary-button" type="submit">
-                            Запустить трансляцию
+                            Подключить просмотр
                         </button>
                         <button
                             className="secondary-button"
                             type="button"
-                            onClick={handleStopStream}
-                            disabled={!streamUrl}
+                            onClick={handleStartPublisher}
                         >
-                            Остановить
+                            Отправлять с камеры
+                        </button>
+                        <button
+                            className="secondary-button"
+                            type="button"
+                            onClick={() => {
+                                stopPublisher();
+                                stopViewer();
+                            }}
+                            disabled={
+                                !publisherSocketRef.current &&
+                                !viewerSocketRef.current
+                            }
+                        >
+                            Остановить WebSocket
                         </button>
 
                         {streamError ? (
@@ -618,30 +825,55 @@ function App() {
 
                 <section className="panel stream-panel">
                     <div className="panel-header">
-                        <h2>Live</h2>
+                        <h2>Просмотр</h2>
                         <p>
-                            {streamUrl
-                                ? `Источник: ${streamSettings.source}`
-                                : "Подключите камеру или сетевой поток"}
+                            {viewerStatus} · кадров: {receivedFrames}
                         </p>
                     </div>
 
                     <div className="stream-viewer">
-                        {streamUrl ? (
+                        {viewerFrameUrl ? (
                             <img
-                                src={streamUrl}
-                                alt="Live трансляция с детекцией объектов"
-                                onError={() =>
-                                    setStreamError(
-                                        "Не удалось открыть трансляцию. Проверьте источник и доступность backend.",
-                                    )
-                                }
+                                src={viewerFrameUrl}
+                                alt="WebSocket трансляция с детекцией объектов"
                             />
                         ) : (
                             <div className="empty-state">
-                                Трансляция появится после запуска
+                                Кадры появятся после подключения viewer и
+                                отправки publisher
                             </div>
                         )}
+                    </div>
+                </section>
+
+                <section className="panel stream-panel publisher-panel">
+                    <div className="panel-header">
+                        <h2>Отправитель</h2>
+                        <p>
+                            {publisherStatus} · кадров: {sentFrames}
+                        </p>
+                    </div>
+
+                    <div className="stream-viewer publisher-preview">
+                        <video
+                            ref={publisherVideoRef}
+                            muted
+                            playsInline
+                            autoPlay
+                        />
+                        <canvas ref={canvasRef} hidden />
+                    </div>
+
+                    <div className="query-summary">
+                        <strong>Viewer WS:</strong>{" "}
+                        {streamSettings.streamId.trim()
+                            ? buildViewerWsUrl()
+                            : "укажите ID"}
+                        <br />
+                        <strong>Publisher WS:</strong>{" "}
+                        {streamSettings.streamId.trim()
+                            ? buildPublisherWsUrl()
+                            : "укажите ID"}
                     </div>
                 </section>
             </main>

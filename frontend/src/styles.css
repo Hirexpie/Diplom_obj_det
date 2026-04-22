@@ -328,7 +328,8 @@ select {
 
 .image-card img,
 .image-card video,
-.stream-viewer img {
+.stream-viewer img,
+.stream-viewer video {
   width: 100%;
   height: auto;
   max-height: 520px;
@@ -349,6 +350,14 @@ select {
 
 .stream-viewer img {
   max-height: 760px;
+}
+
+.publisher-panel {
+  grid-column: 2;
+}
+
+.publisher-preview {
+  min-height: 320px;
 }
 
 .empty-state {
@@ -430,6 +439,10 @@ select {
   }
 
   .detections-panel {
+    grid-column: auto;
+  }
+
+  .publisher-panel {
     grid-column: auto;
   }
 }

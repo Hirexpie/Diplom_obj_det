@@ -134,6 +134,43 @@ class ModelManager:
 
         return generate()
 
+    def render_frame(
+        self,
+        frame_bytes: bytes,
+        model_name: str = "",
+        conf: float = 0.25,
+        iou: float = 0.45,
+        imgsz: int = 960,
+        object_query: str = "",
+    ) -> bytes:
+        frame_array = np.frombuffer(frame_bytes, dtype=np.uint8)
+        frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+        if frame is None:
+            raise ValueError("Could not decode frame")
+
+        if model_name:
+            model = self.get_model(model_name)
+            names = model.names
+            requested_labels = self._parse_object_query(object_query)
+            selected_class_ids = self._match_class_ids(names, requested_labels)
+
+            if not requested_labels or selected_class_ids:
+                results = model.predict(
+                    source=frame,
+                    conf=conf,
+                    iou=iou,
+                    imgsz=imgsz,
+                    classes=selected_class_ids if selected_class_ids else None,
+                    verbose=False,
+                )
+                frame = results[0].plot()
+
+        ok, encoded = cv2.imencode(".jpg", frame)
+        if not ok:
+            raise ValueError("Could not encode rendered frame")
+
+        return encoded.tobytes()
+
     def _predict_image(
         self,
         model_name: str,
