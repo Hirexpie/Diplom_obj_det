@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_URL = "http://37.140.243.39:8000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://37.140.243.39:8000";
 const FILE_KIND_IMAGE = "image";
 const FILE_KIND_VIDEO = "video";
 
@@ -16,6 +16,7 @@ function getFileKind(fileOrType) {
 }
 
 function App() {
+    const [activePage, setActivePage] = useState("predict");
     const [models, setModels] = useState([]);
     const [selectedModel, setSelectedModel] = useState("");
     const [file, setFile] = useState(null);
@@ -30,6 +31,12 @@ function App() {
         imgsz: 960,
     });
     const [objectQuery, setObjectQuery] = useState("");
+    const [streamSettings, setStreamSettings] = useState({
+        source: "0",
+        maxFps: 12,
+    });
+    const [streamUrl, setStreamUrl] = useState("");
+    const [streamError, setStreamError] = useState("");
     const fileKind = file ? getFileKind(file) : FILE_KIND_IMAGE;
     const resultKind = result?.media_type ?? FILE_KIND_IMAGE;
     const renderedSrc =
@@ -122,11 +129,64 @@ function App() {
         }
     }
 
+    function buildStreamUrl() {
+        const params = new URLSearchParams({
+            model_name: selectedModel,
+            source: streamSettings.source,
+            conf: String(settings.conf),
+            iou: String(settings.iou),
+            imgsz: String(settings.imgsz),
+            object_query: objectQuery,
+            max_fps: String(streamSettings.maxFps),
+        });
+
+        return `${API_URL}/api/stream?${params.toString()}`;
+    }
+
+    function handleStartStream(event) {
+        event.preventDefault();
+
+        if (!selectedModel) {
+            setStreamError("Выберите модель для трансляции");
+            return;
+        }
+
+        if (!streamSettings.source.trim()) {
+            setStreamError("Укажите источник трансляции");
+            return;
+        }
+
+        setStreamError("");
+        setStreamUrl(buildStreamUrl());
+    }
+
+    function handleStopStream() {
+        setStreamUrl("");
+    }
+
     return (
         <div className="app-shell">
             <div className="ambient ambient-left" />
             <div className="ambient ambient-right" />
 
+            <nav className="app-nav" aria-label="Основная навигация">
+                <button
+                    className={activePage === "predict" ? "active" : ""}
+                    type="button"
+                    onClick={() => setActivePage("predict")}
+                >
+                    Инференс
+                </button>
+                <button
+                    className={activePage === "streams" ? "active" : ""}
+                    type="button"
+                    onClick={() => setActivePage("streams")}
+                >
+                    Трансляции
+                </button>
+            </nav>
+
+            {activePage === "predict" ? (
             <main className="grid">
                 <section className="panel form-panel">
                     <form onSubmit={handleSubmit}>
@@ -399,6 +459,173 @@ function App() {
                     ) : null}
                 </section>
             </main>
+            ) : (
+            <main className="stream-grid">
+                <section className="panel form-panel">
+                    <form onSubmit={handleStartStream}>
+                        <label className="field">
+                            <span>Модель</span>
+                            <select
+                                value={selectedModel}
+                                onChange={(event) =>
+                                    setSelectedModel(event.target.value)
+                                }
+                                disabled={loadingModels || models.length === 0}
+                            >
+                                {models.map((model) => (
+                                    <option key={model.name} value={model.name}>
+                                        {model.name} ({model.size_mb} MB)
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="field">
+                            <span>Источник</span>
+                            <input
+                                type="text"
+                                placeholder="0, rtsp://..., http://..."
+                                value={streamSettings.source}
+                                onChange={(event) =>
+                                    setStreamSettings((current) => ({
+                                        ...current,
+                                        source: event.target.value,
+                                    }))
+                                }
+                            />
+                            <small className="field-hint">
+                                Для локальной камеры backend-сервера укажите 0.
+                            </small>
+                        </label>
+
+                        <label className="field">
+                            <span>Запрос по объектам</span>
+                            <input
+                                type="text"
+                                placeholder="Например: person, car"
+                                value={objectQuery}
+                                onChange={(event) =>
+                                    setObjectQuery(event.target.value)
+                                }
+                            />
+                        </label>
+
+                        <label className="field">
+                            <span>Confidence: {settings.conf}</span>
+                            <input
+                                type="range"
+                                min="0.05"
+                                max="0.95"
+                                step="0.05"
+                                value={settings.conf}
+                                onChange={(event) =>
+                                    setSettings((current) => ({
+                                        ...current,
+                                        conf: Number(event.target.value),
+                                    }))
+                                }
+                            />
+                        </label>
+
+                        <label className="field">
+                            <span>IoU: {settings.iou}</span>
+                            <input
+                                type="range"
+                                min="0.05"
+                                max="0.95"
+                                step="0.05"
+                                value={settings.iou}
+                                onChange={(event) =>
+                                    setSettings((current) => ({
+                                        ...current,
+                                        iou: Number(event.target.value),
+                                    }))
+                                }
+                            />
+                        </label>
+
+                        <label className="field">
+                            <span>Image Size</span>
+                            <input
+                                type="number"
+                                min="320"
+                                max="1920"
+                                step="32"
+                                value={settings.imgsz}
+                                onChange={(event) =>
+                                    setSettings((current) => ({
+                                        ...current,
+                                        imgsz: Number(event.target.value),
+                                    }))
+                                }
+                            />
+                        </label>
+
+                        <label className="field">
+                            <span>FPS: {streamSettings.maxFps}</span>
+                            <input
+                                type="range"
+                                min="1"
+                                max="30"
+                                step="1"
+                                value={streamSettings.maxFps}
+                                onChange={(event) =>
+                                    setStreamSettings((current) => ({
+                                        ...current,
+                                        maxFps: Number(event.target.value),
+                                    }))
+                                }
+                            />
+                        </label>
+
+                        <button className="primary-button" type="submit">
+                            Запустить трансляцию
+                        </button>
+                        <button
+                            className="secondary-button"
+                            type="button"
+                            onClick={handleStopStream}
+                            disabled={!streamUrl}
+                        >
+                            Остановить
+                        </button>
+
+                        {streamError ? (
+                            <div className="error-box">{streamError}</div>
+                        ) : null}
+                    </form>
+                </section>
+
+                <section className="panel stream-panel">
+                    <div className="panel-header">
+                        <h2>Live</h2>
+                        <p>
+                            {streamUrl
+                                ? `Источник: ${streamSettings.source}`
+                                : "Подключите камеру или сетевой поток"}
+                        </p>
+                    </div>
+
+                    <div className="stream-viewer">
+                        {streamUrl ? (
+                            <img
+                                src={streamUrl}
+                                alt="Live трансляция с детекцией объектов"
+                                onError={() =>
+                                    setStreamError(
+                                        "Не удалось открыть трансляцию. Проверьте источник и доступность backend.",
+                                    )
+                                }
+                            />
+                        ) : (
+                            <div className="empty-state">
+                                Трансляция появится после запуска
+                            </div>
+                        )}
+                    </div>
+                </section>
+            </main>
+            )}
         </div>
     );
 }

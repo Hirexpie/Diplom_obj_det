@@ -4,6 +4,8 @@ import base64
 import io
 import re
 import tempfile
+import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import cv2
@@ -73,6 +75,64 @@ class ModelManager:
             imgsz=imgsz,
             object_query=object_query,
         )
+
+    def stream_mjpeg(
+        self,
+        model_name: str,
+        source: str,
+        conf: float,
+        iou: float,
+        imgsz: int,
+        object_query: str = "",
+        max_fps: float = 12.0,
+    ) -> Iterator[bytes]:
+        model = self.get_model(model_name)
+        names = model.names
+        requested_labels = self._parse_object_query(object_query)
+        selected_class_ids = self._match_class_ids(names, requested_labels)
+        capture_source = self._parse_capture_source(source)
+        capture = cv2.VideoCapture(capture_source)
+
+        if not capture.isOpened():
+            raise ValueError(f"Could not open stream source '{source}'")
+
+        frame_delay = 1.0 / max_fps if max_fps > 0 else 0.0
+
+        def generate() -> Iterator[bytes]:
+            try:
+                while True:
+                    frame_started_at = time.monotonic()
+                    success, frame = capture.read()
+                    if not success:
+                        break
+
+                    results = model.predict(
+                        source=frame,
+                        conf=conf,
+                        iou=iou,
+                        imgsz=imgsz,
+                        classes=selected_class_ids if selected_class_ids else None,
+                        verbose=False,
+                    )
+                    rendered_frame = results[0].plot()
+                    ok, encoded = cv2.imencode(".jpg", rendered_frame)
+                    if not ok:
+                        continue
+
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n\r\n"
+                        + encoded.tobytes()
+                        + b"\r\n"
+                    )
+
+                    elapsed = time.monotonic() - frame_started_at
+                    if frame_delay > elapsed:
+                        time.sleep(frame_delay - elapsed)
+            finally:
+                capture.release()
+
+        return generate()
 
     def _predict_image(
         self,
@@ -287,6 +347,13 @@ class ModelManager:
                 ) and class_id not in matched_ids:
                     matched_ids.append(class_id)
         return matched_ids
+
+    @staticmethod
+    def _parse_capture_source(source: str) -> int | str:
+        stripped_source = source.strip()
+        if stripped_source.isdigit():
+            return int(stripped_source)
+        return stripped_source
 
     @staticmethod
     def _encode_image(image: Image.Image) -> str:

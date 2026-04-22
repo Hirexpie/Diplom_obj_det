@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from .config import settings
 from .model_manager import model_manager
@@ -65,3 +66,35 @@ async def predict(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Inference failed: {exc}") from exc
+
+
+@app.get("/api/stream")
+def stream(
+    model_name: str,
+    source: str = "0",
+    conf: float = 0.25,
+    iou: float = 0.45,
+    imgsz: int = 960,
+    object_query: str = "",
+    max_fps: float = 12.0,
+) -> StreamingResponse:
+    try:
+        frames = model_manager.stream_mjpeg(
+            model_name=model_name,
+            source=source,
+            conf=conf,
+            iou=iou,
+            imgsz=imgsz,
+            object_query=object_query,
+            max_fps=max_fps,
+        )
+        return StreamingResponse(
+            frames,
+            media_type="multipart/x-mixed-replace; boundary=frame",
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Stream failed: {exc}") from exc

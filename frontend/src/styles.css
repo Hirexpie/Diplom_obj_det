@@ -67,11 +67,43 @@ select {
 }
 
 .hero,
-.grid {
+.grid,
+.stream-grid,
+.app-nav {
   position: relative;
   z-index: 1;
   max-width: 1320px;
   margin: 0 auto;
+}
+
+.app-nav {
+  display: inline-flex;
+  gap: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 24px;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: 6px;
+  background: rgba(7, 18, 34, 0.74);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+}
+
+.app-nav button {
+  min-width: 140px;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app-nav button.active {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+  color: #05111d;
 }
 
 .hero {
@@ -130,6 +162,12 @@ select {
 }
 
 .grid {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  gap: 24px;
+}
+
+.stream-grid {
   display: grid;
   grid-template-columns: 380px minmax(0, 1fr);
   gap: 24px;
@@ -202,6 +240,23 @@ select {
   cursor: progress;
 }
 
+.secondary-button {
+  width: 100%;
+  margin-top: 12px;
+  border: 1px solid rgba(156, 177, 209, 0.22);
+  border-radius: 18px;
+  padding: 14px 18px;
+  background: rgba(5, 12, 22, 0.56);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.secondary-button:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
 .error-box {
   margin-top: 16px;
   border: 1px solid rgba(255, 125, 125, 0.32);
@@ -212,7 +267,8 @@ select {
 }
 
 .image-panel,
-.detections-panel {
+.detections-panel,
+.stream-panel {
   padding: 24px;
 }
 
@@ -271,13 +327,28 @@ select {
 }
 
 .image-card img,
-.image-card video {
+.image-card video,
+.stream-viewer img {
   width: 100%;
   height: auto;
   max-height: 520px;
   object-fit: contain;
   border-radius: 16px;
   background: #03070e;
+}
+
+.stream-viewer {
+  display: grid;
+  place-items: center;
+  min-height: 620px;
+  border: 1px solid rgba(156, 177, 209, 0.14);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(4, 11, 20, 0.56);
+}
+
+.stream-viewer img {
+  max-height: 760px;
 }
 
 .empty-state {
@@ -353,7 +424,8 @@ select {
 
 @media (max-width: 1100px) {
   .hero,
-  .grid {
+  .grid,
+  .stream-grid {
     grid-template-columns: 1fr;
   }
 
@@ -373,6 +445,20 @@ select {
 
   .image-stack {
     grid-template-columns: 1fr;
+  }
+
+  .app-nav {
+    display: flex;
+    width: 100%;
+  }
+
+  .app-nav button {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .stream-viewer {
+    min-height: 360px;
   }
 
   .panel-header {
